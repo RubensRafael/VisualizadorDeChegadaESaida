@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Análise de dados</title>
+</head>
+
+<body>
+    <div>
+        <input type="file" id="fileInput" accept=".csv" />
+        <h1>Média de entradas por pessoa.</h1>
+        <canvas id="entradaMediaPorPessoa"></canvas>
+        <h1>Frequência de entradas.</h1>
+        <canvas id="frequenciaEntrada"></canvas>
+        <h1>Tempo médio que as pessoas permanecem no local.</h1>
+        <canvas id="tempoMedioPermanencia"></canvas>
+        <h1>Período do dia com maior frequência de entradas.</h1>
+        <canvas id="periodoMaiorFrequencia"></canvas>
+        <h1>Desvio padrão do tempo de permanência.</h1>
+        <canvas id="desvioPadraoTempoPermanencia"></canvas>
+        <h1>Desvio padrão do horário de entrada em cada período.</h1>
+        <canvas id="desvioPadraoHorarioEntradaPorPeriodo"></canvas>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // Função para ler o arquivo CSV após o upload
+        document.getElementById('fileInput').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                const data = e.target.result;
+                processCSV(data);
+            };
+
+            reader.readAsText(file);
+        });
+
+        // Função para converter o CSV em um array de objetos
+        function parseCSV(data) {
+            const lines = data.split('\n');
+            lines.pop()
+            const headers = lines[0].split(',');
+            const rows = lines.slice(1);
+
+            return rows.map(row => {
+                const values = row.split(',');
+                const obj = {};
+                headers.forEach((header, index) => {
+                    obj[header.trim()] = values[index].trim();
+                });
+                return obj;
+            });
+        } function calcularMedia(arr) {
+            const soma = arr.reduce((a, b) => a + b, 0);
+            return soma / arr.length;
+        }
+
+        // Função para calcular o desvio padrão de um array
+        function calcularDesvioPadrao(arr) {
+            const media = calcularMedia(arr);
+            const variancia = arr.reduce((a, b) => a + Math.pow(b - media, 2), 0) / arr.length;
+            return Math.sqrt(variancia);
+        }
+
+        function entradaMediaPorPessoa(parsedData) {
+
+            const entradas = {};
+
+            // Convertendo os dados do CSV
+            parsedData.forEach(row => {
+                const nome = row['Nome'];
+                const entrada = new Date(row['Entrada']);
+
+                if (!entradas[nome]) {
+                    entradas[nome] = [];
+                }
+                entradas[nome].push(entrada);
+            });
+
+            // Calculando a média de entrada para cada pessoa
+            const labels = [];
+            const dataset = [];
+
+            for (const nome in entradas) {
+                const entradasHoras = entradas[nome].map(date => date.getHours() + date.getMinutes() / 60);
+                const media = entradasHoras.reduce((a, b) => a + b, 0) / entradasHoras.length;
+                labels.push(nome);
+                dataset.push(media.toFixed(2)); // Limitando a 2 casas decimais
+            }
+
+            // Criando o gráfico
+            const ctx = document.getElementById('entradaMediaPorPessoa').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Hora Média de Entrada (em horas decimais)',
+                        data: dataset,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 24
+                        }
+                    }
+                }
+            });
+        }
+
+
+        function frequenciaEntrada(parsedData) {
+            const frequencias = {};
+
+            // Contando a frequência de cada nome
+            parsedData.forEach(row => {
+                const nome = row['Nome'];
+
+                if (!frequencias[nome]) {
+                    frequencias[nome] = 0;
+                }
+                frequencias[nome] += 1;
+            });
+
+            // Preparando os dados para o gráfico
+            const labels = Object.keys(frequencias);  // Nomes das pessoas
+            const dataset = Object.values(frequencias);  // Frequência de cada pessoa
+
+            // Criando o gráfico
+            const ctx = document.getElementById('frequenciaEntrada').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Frequência (Número de Entradas)',
+                        data: dataset,
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+
+        function tempoMedioPermanencia(parsedData) {
+            const permanencias = {};
+
+            // Iterando sobre os dados para calcular o tempo de permanência
+            parsedData.forEach(row => {
+                const nome = row['Nome'];
+                const entrada = new Date(row['Entrada']);
+                const saida = new Date(row['Saida']);
+
+                // Calculando o tempo de permanência em milissegundos e convertendo para minutos
+                const tempoPermanencia = (saida - entrada) / (1000 * 60);
+
+                if (!permanencias[nome]) {
+                    permanencias[nome] = [];
+                }
+                permanencias[nome].push(tempoPermanencia);
+            });
+
+            // Calculando a média de permanência para cada pessoa
+            const labels = [];
+            const dataset = [];
+
+            for (const nome in permanencias) {
+                const totalPermanencia = permanencias[nome].reduce((a, b) => a + b, 0);
+                const mediaPermanencia = totalPermanencia / permanencias[nome].length;
+                labels.push(nome);
+                dataset.push(mediaPermanencia.toFixed(2)); // Arredondando para 2 casas decimais
+            }
+
+            // Criando o gráfico do tempo médio de permanência
+            const ctx = document.getElementById('tempoMedioPermanencia').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Tempo Médio de Permanência (em minutos)',
+                        data: dataset,
+                        backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function periodoMaiorFrequencia(parsedData) {
+            const periodos = {
+                'Manhã (08:00 - 12:00)': {},
+                'Tarde (12:00 - 16:00)': {},
+                'Noite (16:00 - 18:00)': {}
+            };
+
+            // Iterando sobre os dados para contar as entradas em cada período
+            parsedData.forEach(row => {
+                const nome = row['Nome'];
+                const entrada = new Date(row['Entrada']);
+                const horaEntrada = entrada.getHours();
+
+                let periodo;
+
+                if (horaEntrada >= 8 && horaEntrada < 12) {
+                    periodo = 'Manhã (08:00 - 12:00)';
+                } else if (horaEntrada >= 12 && horaEntrada < 16) {
+                    periodo = 'Tarde (12:00 - 16:00)';
+                } else if (horaEntrada >= 16 && horaEntrada < 18) {
+                    periodo = 'Noite (16:00 - 18:00)';
+                }
+
+                if (periodo) {
+                    if (!periodos[periodo][nome]) {
+                        periodos[periodo][nome] = 0;
+                    }
+                    periodos[periodo][nome] += 1;
+                }
+            });
+
+            // Preparando os dados para o gráfico
+            const labels = Object.keys(periodos); // Manhã, Tarde, Noite
+            const datasets = [];
+
+            for (const nome in periodos['Manhã (08:00 - 12:00)']) {
+                datasets.push({
+                    label: nome,
+                    data: [
+                        periodos['Manhã (08:00 - 12:00)'][nome] || 0,
+                        periodos['Tarde (12:00 - 16:00)'][nome] || 0,
+                        periodos['Noite (16:00 - 18:00)'][nome] || 0
+                    ],
+                    backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.2)`,
+                    borderColor: `black`,
+                    borderWidth: 1
+                });
+            }
+
+            // Criando o gráfico
+            const ctx = document.getElementById('periodoMaiorFrequencia').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function desvioPadraoTempoPermanencia(parsedData) {
+            const permanencias = {};
+
+            // Iterando sobre os dados para calcular o tempo de permanência
+            parsedData.forEach(row => {
+                const nome = row['Nome'];
+                const entrada = new Date(row['Entrada']);
+                const saida = new Date(row['Saida']);
+
+                // Calculando o tempo de permanência em milissegundos e convertendo para minutos
+                const tempoPermanencia = (saida - entrada) / (1000 * 60);
+
+                if (!permanencias[nome]) {
+                    permanencias[nome] = [];
+                }
+                permanencias[nome].push(tempoPermanencia);
+            });
+
+            // Calculando o desvio padrão para cada pessoa
+            const labels = [];
+            const dataset = [];
+
+            for (const nome in permanencias) {
+                const desvioPadrao = calcularDesvioPadrao(permanencias[nome]);
+                labels.push(nome);
+                dataset.push(desvioPadrao.toFixed(2)); // Arredondando para 2 casas decimais
+            }
+
+            // Criando o gráfico do desvio padrão do tempo de permanência
+            const ctx = document.getElementById('desvioPadraoTempoPermanencia').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Desvio Padrão do Tempo de Permanência (em minutos)',
+                        data: dataset,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function desvioPadraoHorarioEntradaPorPeriodo(parsedData) {
+            const periodos = {
+                'Manhã (08:00 - 12:00)': {},
+                'Tarde (12:00 - 16:00)': {},
+                'Noite (16:00 - 18:00)': {}
+            };
+
+            // Iterando sobre os dados para coletar os horários de entrada e classificá-los por período do dia
+            parsedData.forEach(row => {
+                const nome = row['Nome'];
+                const entrada = new Date(row['Entrada']);
+                const horaEntrada = entrada.getHours();
+                const minutosEntrada = horaEntrada * 60 + entrada.getMinutes(); // Convertendo hora de entrada para minutos
+
+                let periodo;
+
+                if (horaEntrada >= 8 && horaEntrada < 12) {
+                    periodo = 'Manhã (08:00 - 12:00)';
+                } else if (horaEntrada >= 12 && horaEntrada < 16) {
+                    periodo = 'Tarde (12:00 - 16:00)';
+                } else if (horaEntrada >= 16 && horaEntrada < 18) {
+                    periodo = 'Noite (16:00 - 18:00)';
+                }
+
+                if (periodo) {
+                    if (!periodos[periodo][nome]) {
+                        periodos[periodo][nome] = [];
+                    }
+                    periodos[periodo][nome].push(minutosEntrada);
+                }
+            });
+
+            // Preparando os dados para o gráfico
+            const labels = Object.keys(periodos); // Manhã, Tarde, Noite
+            const datasets = [];
+
+            for (const nome in periodos['Manhã (08:00 - 12:00)']) {
+                datasets.push({
+                    label: nome,
+                    data: [
+                        calcularDesvioPadrao(periodos['Manhã (08:00 - 12:00)'][nome] || []),
+                        calcularDesvioPadrao(periodos['Tarde (12:00 - 16:00)'][nome] || []),
+                        calcularDesvioPadrao(periodos['Noite (16:00 - 18:00)'][nome] || [])
+                    ],
+                    backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.2)`,
+                    borderColor: `black`,
+                    borderWidth: 1
+                });
+            }
+
+            // Criando o gráfico
+            const ctx = document.getElementById('desvioPadraoHorarioEntradaPorPeriodo').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+
+
+        // Função para processar o CSV e criar o gráfico
+
+        function processCSV(data) {
+            const parsedData = parseCSV(data);
+
+            entradaMediaPorPessoa(parsedData);
+            frequenciaEntrada(parsedData);
+            tempoMedioPermanencia(parsedData);
+            periodoMaiorFrequencia(parsedData);
+            desvioPadraoTempoPermanencia(parsedData);
+            desvioPadraoHorarioEntradaPorPeriodo(parsedData);
+
+        }
+    </script>
+</body>
+
+</html>
